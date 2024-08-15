@@ -1,236 +1,239 @@
-import re
-import json
+# import tkinter as tk
+# import tkinter.filedialog
+# import requests
+# import customtkinter
+# from tkinter import messagebox
+# from threading import Thread
+# import time
+# import os
+# from excel_data_extractor_test import main
+#
+# customtkinter.set_appearance_mode("light")
+# customtkinter.set_default_color_theme('blue')
+#
+# def long_running_task(folder, file, status_label, execute_button, result_label):
+#     """ Run the main function and update the status label. """
+#     try:
+#         # Initialize status
+#         status_label.configure(text="Automation Started...")
+#         status_label.update_idletasks()
+#
+#         # Call the actual main function
+#         result = main(folder, file)
+#
+#         # Simulate progress update (if actual progress is known, update accordingly)
+#         for i in range(101):
+#             time.sleep(0.01)  # Simulate work by sleeping
+#             status_label.configure(text=f"Progress: {i}%")
+#             status_label.update_idletasks()
+#
+#         # When task is complete
+#         status_label.configure(text="Automation Completed!")
+#
+#         # Update the result label and open button
+#         # result_label.configure(text=f"Processed file path or message: {result}")
+#
+#     except Exception as e:
+#         status_label.configure(text=f"Error: {str(e)}")
+#
+#     finally:
+#         execute_button.configure(state=customtkinter.NORMAL)
+#
+# def start_reader():
+#     folder = entry.get()
+#     file = entry_1.get()
+#     if folder == 'Folder' or folder == '':
+#         messagebox.showerror('Error', 'Please select a folder to execute')
+#     else:
+#         # Disable the execute button to prevent multiple clicks
+#         execute_button.configure(state=customtkinter.DISABLED)
+#         # Start the long-running task in a separate thread
+#         Thread(target=long_running_task, args=(folder, file, status_label, execute_button, result_label),
+#                daemon=True).start()
+#
+# def browse_folder(entry):
+#     folder_path = tkinter.filedialog.askdirectory()
+#     entry.delete(0, 'end')
+#     entry.insert(0, folder_path)
+#
+# def browse_file_1(entry_1):
+#     file_path = tkinter.filedialog.askopenfilename()
+#     entry_1.delete(0, 'end')
+#     entry_1.insert(0, file_path)
+#
+# def open_file():
+#     file_path = result_label.cget("text").split(": ", 1)[-1].strip()
+#     if os.path.exists(file_path):
+#         try:
+#             os.startfile(file_path)
+#         except Exception as e:
+#             messagebox.showerror("Error", f"Failed to open file: {e}")
+#     else:
+#         messagebox.showerror("Error", "File does not exist or path is incorrect")
+#
+# root = customtkinter.CTk()
+# root.title('Accumark Automation')
+#
+# # Title Label
+# label = customtkinter.CTkLabel(master=root, text="Accumark File Reader", font=('Helvetica', 20))
+# label.place(relx=0.5, rely=0.1, anchor=tkinter.N)
+#
+# # Folder Entry
+# entry = customtkinter.CTkEntry(master=root, width=300, height=25, placeholder_text="Folder")
+# entry.place(relx=0.38, rely=0.2, anchor=tkinter.N)
+#
+# # Excel File Entry
+# entry_1 = customtkinter.CTkEntry(master=root, width=300, height=25, placeholder_text="Excel file")
+# entry_1.place(relx=0.38, rely=0.25, anchor=tkinter.N)
+#
+# # Browse Buttons
+# browse_button_folder = customtkinter.CTkButton(master=root, text="Browse", command=lambda: browse_folder(entry),
+#                                                width=120, height=25, border_width=0, corner_radius=8)
+# browse_button_folder.place(relx=0.82, rely=0.2, anchor=tkinter.N)
+#
+# browse_button_file = customtkinter.CTkButton(master=root, text="Browse", command=lambda: browse_file_1(entry_1),
+#                                              width=120, height=25, border_width=0, corner_radius=8)
+# browse_button_file.place(relx=0.82, rely=0.25, anchor=tkinter.N)
+#
+# # Execute Button
+# execute_button = customtkinter.CTkButton(master=root, text="Execute", command=start_reader, width=430, height=25,
+#                                          border_width=0, corner_radius=8)
+# execute_button.place(relx=0.5, rely=0.35, anchor=tkinter.N)
+#
+# # Status Label
+# status_label = customtkinter.CTkLabel(master=root, text="Ready to Start")
+# status_label.place(relx=0.5, rely=0.4, anchor=tkinter.N)
+#
+# # Result Label
+# result_label = customtkinter.CTkLabel(master=root, text="")
+# result_label.place(relx=0.5, rely=0.48, anchor=tkinter.N)
+#
+#
+# root.geometry("500x700")
+#
+# # Check connection status
+# try:
+#     cond_AT = requests.get("https://saim2481.pythonanywhere.com/ATactivation-desktop-response/")
+#     cond_AT.raise_for_status()
+#     cond_AT = cond_AT.text
+#     if cond_AT != "true":
+#         execute_button.configure(state=customtkinter.DISABLED)
+# except requests.exceptions.RequestException:
+#     messagebox.showerror("Connection Error", "Please Check your internet connection")
+# except Exception as e:
+#     messagebox.showerror("Something Went Wrong", f"Unexpected Error: {e}")
+#     execute_button.configure(state=customtkinter.DISABLED)
+#
+# root.mainloop()
+#
+
+from flask import Flask, request, redirect, url_for, render_template, flash, jsonify, send_file, abort
 import os
-import pandas as pd
-from openpyxl import load_workbook
-from openpyxl.styles import NamedStyle
-from openpyxl.styles.borders import Border, Side
+import zipfile
+import threading
+from werkzeug.utils import secure_filename
+from tempfile import mkdtemp
+from excel_data_extractor_test import main
 
-def extract_and_concatenate(input_string):
-    # Extract the part that starts with 'M' followed by digits
-    m_part_match = re.search(r'M\d+', input_string)
+app = Flask(__name__)
+app.config['ALLOWED_EXTENSIONS'] = {'zip', 'xls', 'xlsx'}
+app.secret_key = 'falsdjfjaklsdfjalksjdffffhhhh78454ddaawfvc'
 
-    # Extract the number between any two alphabetic characters (with or without an underscore after the first character)
-    num_between_alpha_match = re.search(r'[A-Za-z]_?(\d+)(?=[A-Za-z])', input_string)
+# Global variables to store execution status and result file path
+execution_status = {
+    'started': False,
+    'completed': False,
+    'error': None,
+    'result_file': None
+}
 
-    if m_part_match and num_between_alpha_match:
-        m_part = m_part_match.group()
-        num_between_alpha = num_between_alpha_match.group(1)
-        return m_part + num_between_alpha
-    else:
-        return "Invalid input format", "Invalid input format"
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
+def unzip_file(zip_path, extract_to_folder):
+    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+        zip_ref.extractall(extract_to_folder)
 
-def extract_data(content):
-    # Extract L and CM value
-    l_pattern = r'L=(\d+M\s+\d+\.\d+CM)'
-    l_match = re.search(l_pattern, content)
-    l_value = l_match.group(1) if l_match else "Not found"
+def run_long_task(folder, excel_file_path):
+    global execution_status
+    try:
+        execution_status['started'] = True
+        result_file_path = main(folder+"\\files", excel_file_path)
 
-    # Extract U value
-    u_pattern = r'U=(\d+\.\d+%)'
-    u_match = re.search(u_pattern, content)
-    u_value = u_match.group(1) if u_match else "Not found"
-
-    # Extract PERIM value
-    perim_pattern = r'PERIM=(\d+\.\d+CM)'
-    perim_match = re.search(perim_pattern, content)
-    perim_value = perim_match.group(1) if perim_match else "Not found"
-    perim_value_without_CM = perim_value.replace('CM', '')
-
-    # Extract LBMK value
-    lbmk_pattern = r'LBMK:([\w-]+)'
-    lbmk_match = re.search(lbmk_pattern, content)
-    lbmk_value = lbmk_match.group(1) if lbmk_match else "Not found"
-
-    length_M = l_value.split(' ')[0].replace('M', '')
-    length_CM = l_value.split(' ')[1].replace('CM', '')
-    length = int(length_M) + (float(length_CM) / 100)
-    lbmk = extract_and_concatenate(lbmk_value)
-
-    return {
-        "L": length,
-        "U": u_value,
-        "PERIM": perim_value_without_CM,
-        "LBMK": lbmk,
-        "LBMK_full": lbmk_value
-    }
-
-
-def append_to_excel(data):
-    # Convert the data dictionary to a pandas DataFrame
-    new_df = pd.DataFrame([data])
-    excel_path = r'C:\Users\admin\Desktop\accurmarks\Test2.xlsx'
-    if os.path.exists(excel_path):
-        # If file exists, read it and append new data
-        existing_df = pd.read_excel(excel_path)
-        updated_df = pd.concat([existing_df, new_df], ignore_index=True)
-    else:
-        # If file doesn't exist, create new DataFrame
-        updated_df = new_df
-
-    # Write the updated DataFrame to Excel
-    updated_df.to_excel(excel_path, index=False)
-    print(f"Data appended to {excel_path}")
-
-
-def change_extension(file_path, new_extension):
-    base_name, _ = os.path.splitext(file_path)
-    new_file_path = base_name + "." + new_extension
-    os.rename(file_path, new_file_path)
-    return new_file_path
-
-
-def evaluate_formula(ws, formula):
-    # Remove '=CONCATENATE(' and ')'
-    formula = formula[len('=CONCATENATE('):-1]
-    references = formula.split(',')
-
-    # Extract values from the referenced cells
-    values = []
-    for ref in references:
-        ref = ref.strip()  # Clean up any whitespace
-        cell_value = ws[ref].value
-        values.append(cell_value)
-
-    # Concatenate the values
-    return ''.join(str(value) for value in values)
-
-
-def find_and_edit_excel(data, appended_items, ws):
-    # Define the column to search and the substring
-    header_row = 1
-    # Populate headers-to-columns.
-    fields = {}
-    for cnum in range(1, ws.max_column + 1):
-        field = ws.cell(row=header_row, column=cnum).value
-        fields[field] = cnum
-
-    substring = data['LBMK']  # Substring to search for
-
-    percentage_style = NamedStyle(name='percentage_style', number_format='0.00%')
-    number_style = NamedStyle(name='number_style', number_format='0.00')
-
-    # Define border style
-    border_style = Border(
-        left=Side(border_style="thin"),
-        right=Side(border_style="thin"),
-        top=Side(border_style="thin"),
-        bottom=Side(border_style="thin")
-    )
-
-    # Determine if LBMK_full starts with 'LN'
-    linning = bool(data['LBMK_full'].startswith('LN'))
-
-    # Iterate through the rows
-    for row_num in range(header_row + 1, ws.max_row + 1):
-        job = ws.cell(row=row_num, column=fields['Job #']).value
-        cut = ws.cell(row=row_num, column=fields['Cut #']).value
-        concatenate = ws.cell(row=row_num, column=fields['Concatenate']).value
-        job_cut = str(job) + str(cut)
-
-        unique = job_cut + str(data['L']) + str(data['U'])
-
-        # Evaluate formula if necessary
-        if concatenate and isinstance(concatenate, str) and concatenate.startswith('=CONCATENATE'):
-            concatenated_value = evaluate_formula(ws, concatenate)
+        if result_file_path:
+            execution_status['result_file'] = result_file_path
+            execution_status['completed'] = True
+            execution_status['error'] = None
         else:
-            concatenated_value = concatenate
-
-        if substring == job_cut and row_num not in appended_items:
-            # If LBMK_full starts with 'LN', only update if 'Lining' is in concatenated_value
-            if linning:
-                if "Lining" in str(concatenated_value):
-                    # Edit cells in the same row
-                    ws.cell(row=row_num, column=fields['Marker Length']).value = data['L']
-                    ws.cell(row=row_num, column=fields['Marker Length']).style = number_style
-                    ws.cell(row=row_num, column=fields['Marker Utilization']).value = data['U']
-                    ws.cell(row=row_num, column=fields['Marker Utilization']).style = percentage_style
-                    ws.cell(row=row_num, column=fields['PARAMETER']).value = data['PERIM']
-                    ws.cell(row=row_num, column=fields['PARAMETER']).style = number_style
-                    # Apply border to the updated cells
-                    ws.cell(row=row_num, column=fields['Marker Length']).border = border_style
-                    ws.cell(row=row_num, column=fields['Marker Utilization']).border = border_style
-                    ws.cell(row=row_num, column=fields['PARAMETER']).border = border_style
-                    appended_items.append(row_num)
-                    print(f"Data updated in row {row_num}.")
-                    break  # Exit loop once the substring is found
-            else:
-                # If LBMK_full does not start with 'LN', update regardless of 'Lining'
-                ws.cell(row=row_num, column=fields['Marker Length']).value = data['L']
-                ws.cell(row=row_num, column=fields['Marker Length']).style = number_style
-                ws.cell(row=row_num, column=fields['Marker Utilization']).value = data['U']
-                ws.cell(row=row_num, column=fields['Marker Utilization']).style = percentage_style
-                ws.cell(row=row_num, column=fields['PARAMETER']).value = data['PERIM']
-                ws.cell(row=row_num, column=fields['PARAMETER']).style = number_style
-                # Apply border to the updated cells
-                ws.cell(row=row_num, column=fields['Marker Length']).border = border_style
-                ws.cell(row=row_num, column=fields['Marker Utilization']).border = border_style
-                ws.cell(row=row_num, column=fields['PARAMETER']).border = border_style
-                appended_items.append(row_num)
-                print(f"Data updated in row {row_num}.")
-                break  # Exit loop once the substring is found
-
-    return row_num
-
-
-def main(directory_path, excel_file_path):
-    # Load the workbook
-    try:
-        wb = load_workbook(excel_file_path)
-        print(f"Workbook '{excel_file_path}' loaded successfully.")
+            execution_status['error'] = 'Failed to process files'
     except Exception as e:
-        print(f"Error loading workbook: {e}")
-        return None
+        execution_status['error'] = str(e)
+    finally:
+        execution_status['started'] = False
 
-    data_json = {}
-    appended_items = []
+@app.route('/')
+def index():
+    return render_template('index.html', execution_status=execution_status)
 
-    # Select the active sheet
-    try:
-        sheet = wb['Sheet1']
-        print("Sheet 'Sheet1' selected successfully.")
-    except KeyError:
-        print("Error: Sheet 'Sheet1' not found.")
-        return None
-    except Exception as e:
-        print(f"Error selecting sheet: {e}")
-        return None
+@app.route('/upload', methods=['POST'])
+def upload_files():
+    uploaded_zip = request.files.get('folder')
+    excel_file = request.files.get('file')
 
-    for index, filename in enumerate(os.listdir(directory_path)):
-        print(f'=>Processing {index}. {filename}')
-        file_path = os.path.join(directory_path, filename)
-        if os.path.isfile(file_path):
-            # Ensure file has a .txt extension before processing
-            if not file_path.lower().endswith('.txt'):
-                file_path = change_extension(file_path, 'txt')
-            try:
-                with open(file_path, 'r') as file:
-                    content = file.read()
-            except Exception as e:
-                print(f"Error reading file {file_path}: {e}")
-                continue
+    if not uploaded_zip or not excel_file:
+        flash('No ZIP file or Excel file uploaded')
+        return redirect(request.url)
 
-            extracted_data = extract_data(content)
-            print(f"Extracted data from {filename}: {extracted_data}")
-            # Append the data to Excel
-            append_to_excel(extracted_data)
+    if not allowed_file(uploaded_zip.filename) or not allowed_file(excel_file.filename):
+        flash('Invalid file type')
+        return redirect(request.url)
 
-            # Find and edit the Excel sheet
-            row_num = find_and_edit_excel(extracted_data, appended_items, sheet)
-            if row_num:
-                print(f"Data updated in row {row_num}.")
+    # Create a temporary directory
+    temp_dir = mkdtemp()
 
-    # Save changes to the workbook
-    try:
-        wb.save(excel_file_path)
-        print(f"Workbook '{excel_file_path}' saved successfully.")
-    except Exception as e:
-        print(f"Error saving workbook: {e}")
+    # Save the ZIP file
+    zip_filename = secure_filename(uploaded_zip.filename)
+    zip_path = os.path.join(temp_dir, zip_filename)
+    uploaded_zip.save(zip_path)
+
+    # Create a folder to extract the ZIP contents
+    extract_folder = os.path.join(temp_dir, os.path.splitext(zip_filename)[0])
+    if not os.path.exists(extract_folder):
+        os.makedirs(extract_folder)
+
+    # Unzip the file
+    unzip_file(zip_path, extract_folder)
+
+    # Save the Excel file
+    excel_filename = secure_filename(excel_file.filename)
+    excel_file_path = os.path.join(temp_dir, excel_filename)
+    excel_file.save(excel_file_path)
+
+    # Start the long-running task in a separate thread
+    threading.Thread(target=run_long_task, args=(extract_folder, excel_file_path), daemon=True).start()
+
+    flash('Processing started. Please check the status for updates.')
+    return redirect(url_for('index'))
+
+@app.route('/status')
+def status():
+    return jsonify(execution_status)
+
+@app.route('/download')
+def download_file():
+    if execution_status['result_file']:
+        try:
+            return send_file(execution_status['result_file'], as_attachment=True)
+        except Exception as e:
+            print(f"Error sending file: {e}")
+            abort(404)
+    else:
+        flash('No result file available for download.')
+        return redirect(url_for('index'))
+
+if __name__ == '__main__':
+    app.run()
 
 
-# if __name__ == '__main__':
-#     # Update directory path and excel file path as needed
-#     directory_path = r'C:\Users\admin\Desktop\accurmarks'
-#     excel_file_path = r'C:\Users\admin\Desktop\accurmarks\Test2.xlsx'
-#     main(directory_path, excel_file_path)
+
