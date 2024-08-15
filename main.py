@@ -128,14 +128,13 @@
 #
 
 from flask import Flask, request, redirect, url_for, render_template, flash, jsonify, send_file, abort
-import os
+import io
 import zipfile
+import threading
 from werkzeug.utils import secure_filename
 from excel_data_extractor_test import main
-import threading
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = os.getcwd()  # Save files to the current working directory
 app.config['ALLOWED_EXTENSIONS'] = {'zip', 'xls', 'xlsx'}
 app.secret_key = 'falsdjfjaklsdfjalksjdffffhhhh78454ddaawfvc'  # For flashing messages
 
@@ -151,16 +150,26 @@ def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
-def unzip_file(zip_path, extract_to_folder):
-    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+def unzip_file(zip_file, extract_to_folder):
+    with zipfile.ZipFile(zip_file, 'r') as zip_ref:
         zip_ref.extractall(extract_to_folder)
 
-def run_long_task(folder, excel_file_path):
+def run_long_task(zip_file, excel_file):
     global execution_status
     try:
         execution_status['started'] = True
+        # Create a temporary folder for extracted files
+        temp_folder = io.BytesIO()
+        with zipfile.ZipFile(zip_file, 'r') as zip_ref:
+            with zip_ref.open(zip_ref.namelist()[0]) as extracted_file:
+                temp_folder.write(extracted_file.read())
+        temp_folder.seek(0)
+
+        # Save the Excel file temporarily in memory
+        excel_file_stream = io.BytesIO(excel_file.read())
+
         # Call the main function and get the updated file path
-        result_file_path = main(folder+"\\files", excel_file_path)
+        result_file_path = main(temp_folder, excel_file_stream)
 
         if result_file_path:
             execution_status['result_file'] = result_file_path
@@ -172,7 +181,6 @@ def run_long_task(folder, excel_file_path):
         execution_status['error'] = str(e)
     finally:
         execution_status['started'] = False
-
 
 @app.route('/')
 def index():
@@ -191,26 +199,8 @@ def upload_files():
         flash('Invalid file type')
         return redirect(request.url)
 
-    # Save the ZIP file
-    zip_filename = secure_filename(uploaded_zip.filename)
-    zip_path = os.path.join(app.config['UPLOAD_FOLDER'], zip_filename)
-    uploaded_zip.save(zip_path)
-
-    # Create a folder to extract the ZIP contents
-    extract_folder = os.path.join(app.config['UPLOAD_FOLDER'], os.path.splitext(zip_filename)[0])
-    if not os.path.exists(extract_folder):
-        os.makedirs(extract_folder)
-
-    # Unzip the file
-    unzip_file(zip_path, extract_folder)
-
-    # Save the Excel file
-    excel_filename = secure_filename(excel_file.filename)
-    excel_file_path = os.path.join(app.config['UPLOAD_FOLDER'], excel_filename)
-    excel_file.save(excel_file_path)
-
     # Start the long-running task in a separate thread
-    threading.Thread(target=run_long_task, args=(extract_folder, excel_file_path), daemon=True).start()
+    threading.Thread(target=run_long_task, args=(uploaded_zip, excel_file), daemon=True).start()
 
     flash('Processing started. Please check the status for updates.')
     return redirect(url_for('index'))
