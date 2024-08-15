@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accumark Automation</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        #statusMessage {
+            font-size: 1.2em;
+        }
+        #downloadButton {
+            display: none; /* Initially hidden */
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="text-center mb-4">Accumark File Reader</h1>
+        <form action="{{ url_for('upload_files') }}" method="post" enctype="multipart/form-data" class="form-group">
+            <div class="form-group">
+                <label for="folder">Upload Folder as ZIP:</label>
+                <input type="file" id="folder" name="folder" class="form-control-file" required>
+            </div>
+            <div class="form-group">
+                <label for="file">Upload Excel File:</label>
+                <input type="file" id="file" name="file" class="form-control-file" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Upload</button>
+        </form>
+        <br>
+        {% with messages = get_flashed_messages(with_categories=True) %}
+            {% if messages %}
+                <div class="alert alert-info">
+                    <ul class="mb-0">
+                    {% for category, message in messages %}
+                        <li>{{ message|safe }}</li>
+                    {% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+        {% endwith %}
+        <div id="statusSection" class="mt-4">
+            <h3>Status</h3>
+            <div id="statusMessage">Waiting for execution...</div>
+            <a id="downloadButton" class="btn btn-success mt-3" href="{{ url_for('download_file') }}">Download Result</a>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS and dependencies -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+        function updateStatus() {
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    const statusMessage = document.getElementById('statusMessage');
+                    const downloadButton = document.getElementById('downloadButton');
+
+                    if (data.started) {
+                        statusMessage.textContent = 'Execution started...';
+                        downloadButton.style.display = 'none'; // Hide button while processing
+                    } else if (data.completed) {
+                        statusMessage.textContent = 'Execution completed successfully!';
+                        downloadButton.style.display = 'inline-block'; // Show button after completion
+                    } else if (data.error) {
+                        statusMessage.textContent = 'Error: ' + data.error;
+                        downloadButton.style.display = 'none'; // Hide button on error
+                    } else {
+                        statusMessage.textContent = 'Waiting for execution...';
+                        downloadButton.style.display = 'none'; // Hide button initially
+                    }
+                });
+        }
+
+        // Update status every 5 seconds
+        setInterval(updateStatus, 5000);
+    </script>
+</body>
+</html>
